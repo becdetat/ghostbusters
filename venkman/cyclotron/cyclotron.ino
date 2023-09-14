@@ -1,26 +1,35 @@
 // Simple cyclotron lighting animation. Designed for an Arduino Nano.
+#include <Arduino_FreeRTOS.h>
+#include <timers.h>
 
 int cyclotronLedPin[] = {3, 5, 6, 9};
 int cyclotronLedBrightness[] = {0, 0, 0, 0};
 int cyclotronLedState[]= {1,0,0,0}; // 0 = off, 1 = turning on, 2 = on, 3 = turning off
-int cyclotronLedOnTime = 1000;  // ms
+const int CYCLOTRON_LED_ON_TIME = 1000;  // ms
 const float CYCLOTRON_LED_WARM_UP_TIME = 100.0; //ms
 const float CYCLOTRON_LED_COOL_DOWN_TIME = 200.0; //ms
-unsigned long lastUpdateTime = 0;
 const float UPDATE_INTERVAL = 10.0; // Update every 10ms
+TimerHandle_t updateTimer;
 
 void setup() {
+  Serial.begin(9600);
+
   for (int i = 0; i < 4; i ++) {
     pinMode(cyclotronLedPin[i], OUTPUT);
   }
+
+  updateTimer = xTimerCreate("UpdateTimer", pdMS_TO_TICKS(UPDATE_INTERVAL), pdTRUE, (void*)0, updateTimerCallback);
+  xTimerStart(updateTimer, 0);  
+  vTaskStartScheduler();  
 }
 
-void loop() {
-  for (int i = 0; i < 4; i++) {
+void loop() {}
+
+void updateTimerCallback(TimerHandle_t xTimer) {
+  for (int i = 0; i < 4; i ++) {
     updateCyclotronLedState(i);
     updateCyclotronLedBrightness(i);
   }
-  delay(UPDATE_INTERVAL);
 }
 
 int getFadeDeltaForCyclotronLed(int index) {
@@ -36,13 +45,16 @@ int getFadeDeltaForCyclotronLed(int index) {
 }
 
 void updateCyclotronLedBrightness(int index) {
-  cyclotronLedBrightness[index] = constrain(cyclotronLedBrightness[index] + getFadeDeltaForCyclotronLed(index), 0, 255);
+  int brightness = cyclotronLedBrightness[index] + getFadeDeltaForCyclotronLed(index);
+  Serial.println(brightness); // load bearing
+
+  cyclotronLedBrightness[index] = constrain(brightness, 0, 255);
 
   analogWrite(cyclotronLedPin[index], cyclotronLedBrightness[index]);
 }
 
 void updateCyclotronLedState(int index) {
-  int ledThatShouldBeOn = (millis() / cyclotronLedOnTime) % 4;
+  int ledThatShouldBeOn = (millis() / CYCLOTRON_LED_ON_TIME) % 4;
   bool shouldThisLedBeOn = ledThatShouldBeOn == index;
   
   if (cyclotronLedState[index] == 0 && shouldThisLedBeOn) cyclotronLedState[index] = 1;
